@@ -44,13 +44,20 @@ NEXTAUTH_URL=http://localhost:3000
 
 ### 3. Database Setup
 
-Initialize the database (creates all tables + seeds admin account):
+Add `INIT_SECRET` to your `.env.local`:
 
-```
-GET /api/init
+```env
+INIT_SECRET=your_init_secret_value
 ```
 
-Or visit `http://localhost:3000/api/init` after starting the dev server.
+Initialize the database (creates all tables + seeds admin account) by sending a POST request with the `x-init-secret` header:
+
+```bash
+curl -X POST http://localhost:3000/api/init \
+  -H "x-init-secret: your_INIT_SECRET_value"
+```
+
+> **Note:** The `/api/init` endpoint is POST-only and requires the `x-init-secret` header matching your `INIT_SECRET` env variable. Visiting the URL in a browser (GET request) will return `405 Method Not Allowed`.
 
 ### 4. Run Dev Server
 
