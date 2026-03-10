@@ -40,25 +40,19 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 NEXTAUTH_SECRET=your_random_secret_string
 NEXTAUTH_URL=http://localhost:3000
-INIT_SECRET=your_random_init_secret
+INIT_SECRET=your_random_secret_32chars
 ```
 
 ### 3. Database Setup
 
-Add `INIT_SECRET` to your `.env.local`:
-
-```env
-INIT_SECRET=your_init_secret_value
-```
-
-Initialize the database (creates all tables + seeds admin account) by sending a POST request with the `x-init-secret` header:
+Initialize the database (creates all tables + seeds admin account):
 
 ```bash
 curl -X POST http://localhost:3000/api/init \
-  -H "x-init-secret: your_INIT_SECRET_value"
+  -H "x-init-secret: YOUR_INIT_SECRET_VALUE"
 ```
 
-> **Note:** The `/api/init` endpoint is POST-only and requires the `x-init-secret` header matching your `INIT_SECRET` env variable. Visiting the URL in a browser (GET request) will return `405 Method Not Allowed`.
+Note: This endpoint is POST-only and requires the `x-init-secret` header matching your `INIT_SECRET` env var. Do not visit this URL in a browser (GET returns 405).
 
 ### 4. Run Dev Server
 
