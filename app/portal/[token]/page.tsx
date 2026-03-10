@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Image from 'next/image'
-import { Scale, FileText, Upload, CheckCircle, PenLine, AlertCircle, Loader2 } from 'lucide-react'
+import {
+  Scale, FileText, Upload, CheckCircle, PenLine,
+  AlertCircle, Loader2, X, File, CheckCircle2
+} from 'lucide-react'
 
 interface PortalData {
   matter: {
@@ -22,15 +25,28 @@ interface PortalData {
   }>
 }
 
+interface UploadedFile {
+  id: string
+  name: string
+  status: 'uploading' | 'done' | 'error'
+  errorMsg?: string
+}
+
 export default function ClientPortalPage() {
   const params = useParams()
   const token = params.token as string
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [data, setData] = useState<PortalData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [signing, setSigning] = useState<string | null>(null)
   const [signatureName, setSignatureName] = useState('')
   const [showSignModal, setShowSignModal] = useState<string | null>(null)
+
+  // Upload state
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [isDragOver, setIsDragOver] = useState(false)
 
   useEffect(() => {
     fetch(`/api/portal/${token}`)
@@ -59,6 +75,70 @@ export default function ClientPortalPage() {
     } finally {
       setSigning(null)
     }
+  }
+
+  const uploadFile = async (file: File) => {
+    const tempId = `${Date.now()}_${file.name}`
+    setUploadedFiles(prev => [...prev, { id: tempId, name: file.name, status: 'uploading' }])
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('token', token)
+      if (data?.matter?.id) {
+        formData.append('matter_id', data.matter.id)
+      }
+
+      const res = await fetch('/api/portal/upload', {
+        method: 'POST',
+        body: formData
+      })
+
+      const result = await res.json()
+
+      if (!res.ok || result.error) {
+        setUploadedFiles(prev =>
+          prev.map(f => f.id === tempId ? { ...f, status: 'error', errorMsg: result.error || 'Upload failed' } : f)
+        )
+      } else {
+        setUploadedFiles(prev =>
+          prev.map(f => f.id === tempId ? { ...f, id: result.document?.id || tempId, status: 'done' } : f)
+        )
+      }
+    } catch (err) {
+      setUploadedFiles(prev =>
+        prev.map(f => f.id === tempId ? { ...f, status: 'error', errorMsg: 'Network error — please try again' } : f)
+      )
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    for (const file of files) {
+      await uploadFile(file)
+    }
+    // Reset input so same file can be re-uploaded if needed
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    const files = Array.from(e.dataTransfer.files)
+    for (const file of files) {
+      await uploadFile(file)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+
+  const handleDragLeave = () => setIsDragOver(false)
+
+  const removeUpload = (id: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== id))
   }
 
   if (loading) {
@@ -156,7 +236,7 @@ export default function ClientPortalPage() {
                     {!doc.signed && (
                       <button
                         onClick={() => setShowSignModal(doc.id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700"
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 min-h-[44px]"
                       >
                         <PenLine className="h-4 w-4" />
                         Sign
@@ -176,22 +256,91 @@ export default function ClientPortalPage() {
           </div>
         )}
 
+        {/* Document Upload Section — fully wired */}
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
           <h3 className="font-semibold text-slate-900 mb-2 flex items-center gap-2">
             <Upload className="h-5 w-5 text-indigo-600" />
             Upload Documents
           </h3>
           <p className="text-slate-500 text-sm mb-4">Share any relevant documents with your attorney</p>
-          <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-indigo-400 hover:bg-indigo-50 transition-colors cursor-pointer">
-            <Upload className="h-8 w-8 mx-auto mb-2 text-slate-400" />
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt"
+            multiple
+            onChange={handleFileChange}
+            className="sr-only"
+            id="portal-file-upload"
+            aria-label="Upload documents"
+          />
+
+          {/* Clickable dropzone */}
+          <label
+            htmlFor="portal-file-upload"
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            className={`block border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+              isDragOver
+                ? 'border-indigo-500 bg-indigo-50'
+                : 'border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+            }`}
+          >
+            <Upload className={`h-8 w-8 mx-auto mb-2 ${isDragOver ? 'text-indigo-500' : 'text-slate-400'}`} />
             <p className="text-slate-600 text-sm font-medium">Click to upload or drag and drop</p>
-            <p className="text-slate-400 text-xs mt-1">PDF, DOC, JPG up to 10MB</p>
-          </div>
+            <p className="text-slate-400 text-xs mt-1">PDF, DOC, DOCX, JPG, PNG up to 10MB</p>
+          </label>
+
+          {/* Upload status list */}
+          {uploadedFiles.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {uploadedFiles.map(f => (
+                <li
+                  key={f.id}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200"
+                >
+                  {f.status === 'uploading' && (
+                    <Loader2 className="h-4 w-4 text-indigo-500 animate-spin flex-shrink-0" />
+                  )}
+                  {f.status === 'done' && (
+                    <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                  )}
+                  {f.status === 'error' && (
+                    <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+                  )}
+                  <File className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-800 truncate font-medium">{f.name}</p>
+                    {f.status === 'uploading' && (
+                      <p className="text-xs text-indigo-600">Uploading...</p>
+                    )}
+                    {f.status === 'done' && (
+                      <p className="text-xs text-green-600">Uploaded successfully</p>
+                    )}
+                    {f.status === 'error' && (
+                      <p className="text-xs text-red-600">{f.errorMsg || 'Upload failed'}</p>
+                    )}
+                  </div>
+                  {f.status !== 'uploading' && (
+                    <button
+                      onClick={() => removeUpload(f.id)}
+                      className="p-1 rounded hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex-shrink-0"
+                      aria-label="Remove"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <div className="text-center text-slate-400 text-xs pb-8">
           <Scale className="h-4 w-4 inline mr-1" />
-          Powered by LegalIntake — Secure & Confidential
+          Powered by LegalIntake — Secure &amp; Confidential
         </div>
       </div>
 
@@ -212,14 +361,14 @@ export default function ClientPortalPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setShowSignModal(null)}
-                className="flex-1 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+                className="flex-1 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 min-h-[44px]"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleSign(showSignModal)}
                 disabled={!!signing || !signatureName.trim()}
-                className="flex-1 py-2.5 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 min-h-[44px]"
               >
                 {signing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PenLine className="h-4 w-4" />}
                 {signing ? 'Signing...' : 'Sign Now'}

@@ -1,8 +1,26 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase'
 import bcrypt from 'bcryptjs'
 
-export async function GET() {
+// SECURE: POST-only endpoint protected by x-init-secret header
+// Set INIT_SECRET env var to a strong random string before calling this endpoint
+export async function POST(req: NextRequest) {
+  const initSecret = process.env.INIT_SECRET
+  if (!initSecret) {
+    return NextResponse.json(
+      { error: 'INIT_SECRET environment variable is not configured on this server.' },
+      { status: 500 }
+    )
+  }
+
+  const clientSecret = req.headers.get('x-init-secret')
+  if (!clientSecret || clientSecret !== initSecret) {
+    return NextResponse.json(
+      { error: 'Forbidden: invalid or missing x-init-secret header.' },
+      { status: 403 }
+    )
+  }
+
   try {
     // Create tables
     const tables = [
@@ -237,4 +255,9 @@ export async function GET() {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json({ success: false, error: message }, { status: 500 })
   }
+}
+
+// Block all other HTTP methods explicitly
+export async function GET() {
+  return NextResponse.json({ error: 'Method not allowed. Use POST with x-init-secret header.' }, { status: 405 })
 }
