@@ -40,6 +40,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 NEXTAUTH_SECRET=your_random_secret_string
 NEXTAUTH_URL=http://localhost:3000
+INIT_SECRET=your_random_init_secret
 ```
 
 ### 3. Database Setup
